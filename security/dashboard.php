@@ -196,6 +196,7 @@ $logs = $conn->query("
         </tr>
       </thead>
       <tbody>
+        <!-- comment -->
         <?php while ($row = $logs->fetch_assoc()): ?>
         <tr>
           <td><?= $row['id'] ?></td>
