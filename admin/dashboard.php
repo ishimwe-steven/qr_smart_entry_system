@@ -55,15 +55,7 @@ include '../includes/admin_sidebar.php';
         </div>
       </div>
 
-      <div class="col-md-3"style="width:400px">
-        <div class="card bg-success text-white shadow">
-          <div class="card-body">
-            <h5><i class="fas fa-user-graduate"></i> Total Students</h5>
-            <h2><?= $totalStudents ?></h2>
-            <a href="manage_students.php" class="text-white">More info <i class="fas fa-arrow-circle-right"></i></a>
-          </div>
-        </div>
-      </div>
+    
 
       <div class="col-md-3" style="width:400px">
         <div class="card bg-warning text-dark shadow">

@@ -12,13 +12,15 @@ include '../includes/header.php';
 <div class="d-flex">
   <?php include '../includes/admin_sidebar.php'; ?>
 
-  <div class="flex-grow-1 p-4" style="margin-left:300px;">
+ 
+<div class="flex-grow-1 p-4" style="margin-left:300px;">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2>Manage Students</h2>
+      <h2>Manage Laptops</h2>
       
     </div>
-    <div class=""   style="margin-left: 1365px;">
+    <div class=""   style="margin-left: 1205px;">
             <a href="add_student.php" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Student</a>
+             <a href="add_laptop.php" class="btn btn-success"><i class="fas fa-laptop"></i> Add Laptop</a>
          </div>
 
     <!-- Live Search Input -->

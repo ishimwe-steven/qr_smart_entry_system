@@ -43,20 +43,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
 // Handle QR scan input
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['scan_qr'])) {
     $input = trim($_POST['scan_qr']);
-    if (preg_match('/id=(\d+)/', $input, $matches)) {
-        $student_id = intval($matches[1]);
+    if (preg_match('/laptop_id=(\d+)/', $input, $matches)) {
+        $laptop_id = intval($matches[1]);
     } else {
-        $student_id = intval($input);
+        $laptop_id = intval($input);
     }
 
     $stmt = $conn->prepare("
         SELECT s.id AS student_id, s.first_name, s.last_name, s.reg_no, s.department, s.picture,
                l.id AS laptop_id, l.brand, l.serial_number
-        FROM students s
-        LEFT JOIN laptops l ON s.id = l.student_id
-        WHERE s.id = ?
+        FROM laptops l
+        LEFT JOIN students s ON l.student_id = s.id
+        WHERE l.id = ?
     ");
-    $stmt->bind_param("i", $student_id);
+    $stmt->bind_param("i", $laptop_id);
     $stmt->execute();
     $res = $stmt->get_result();
     $info = $res->fetch_assoc();
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['scan_qr'])) {
         $last = $res2->fetch_assoc();
         $info['last_status'] = $last['status'] ?? 'OUT';
     } else {
-        $_SESSION['error_message'] = "Student not found!";
+        $_SESSION['error_message'] = "Laptop not found!";
         header("Location: dashboard.php");
         exit;
     }
@@ -127,7 +127,7 @@ $logs = $conn->query("
 
     <form method="POST" class="mb-3">
       <label for="scan_qr" class="form-label">Scan or paste QR code content:</label>
-      <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or ID" style="width:400px;" autofocus>
+      <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or laptop ID" style="width:400px;" autofocus>
     </form>
 
     <?php if ($info): ?>
@@ -196,7 +196,6 @@ $logs = $conn->query("
         </tr>
       </thead>
       <tbody>
-        <!-- comment -->
         <?php while ($row = $logs->fetch_assoc()): ?>
         <tr>
           <td><?= $row['id'] ?></td>
@@ -205,11 +204,7 @@ $logs = $conn->query("
           <td><?= htmlspecialchars($row['brand']) ?></td>
           <td><?= htmlspecialchars($row['serial_number']) ?></td>
           <td><span class="badge <?= $row['status'] === 'IN' ? 'bg-success' : 'bg-danger' ?>"><?= $row['status'] ?></span></td>
-          <td>
-            <?= $row['status'] === 'IN'
-              ? htmlspecialchars($row['entry_time'])
-              : htmlspecialchars($row['exit_time']) ?>
-          </td>
+          <td><?= $row['status'] === 'IN' ? htmlspecialchars($row['entry_time']) : htmlspecialchars($row['exit_time']) ?></td>
         </tr>
         <?php endwhile; ?>
       </tbody>

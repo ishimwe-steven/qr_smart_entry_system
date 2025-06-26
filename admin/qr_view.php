@@ -2,23 +2,23 @@
 session_start();
 include '../includes/db.php';
 
-$id = intval($_GET['id']);
+$laptop_id = intval($_GET['laptop_id']);
 
-// Fetch student + laptop info
+// Fetch laptop + student info
 $sql = "
   SELECT s.first_name, s.last_name, s.reg_no, s.department, s.picture,
          l.serial_number, l.brand
-  FROM students s
-  LEFT JOIN laptops l ON s.id = l.student_id
-  WHERE s.id = ?
+  FROM laptops l
+  LEFT JOIN students s ON l.student_id = s.id
+  WHERE l.id = ?
 ";
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $id);
+$stmt->bind_param("i", $laptop_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows !== 1) {
-    echo "<div style='color: red; font-weight: bold;'>Student not found!</div>";
+    echo "<div style='color: red; font-weight: bold;'>Laptop not found!</div>";
     exit;
 }
 
@@ -29,7 +29,7 @@ $data = $result->fetch_assoc();
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Student QR Info</title>
+  <title>Laptop QR Info</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
@@ -37,7 +37,7 @@ $data = $result->fetch_assoc();
 <div class="container mt-5">
   <div class="card shadow" style="max-width: 600px; margin: auto;">
     <div class="card-body text-center">
-      <h3 class="card-title mb-3">Student Information</h3>
+      <h3 class="card-title mb-3">Laptop Information</h3>
 
       <?php if (!empty($data['picture'])): ?>
         <img src="../uploads/<?= htmlspecialchars($data['picture']) ?>" class="img-thumbnail mb-3" style="width: 150px; height: auto;">

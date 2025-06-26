@@ -8,7 +8,7 @@ if (isset($_POST['query'])) {
 
 $sql = "
   SELECT s.id AS student_id, s.first_name, s.last_name, s.reg_no, s.department, s.email, s.phone,
-         l.brand, l.serial_number
+         l.id AS laptop_id, l.brand, l.serial_number
   FROM students s
   LEFT JOIN laptops l ON s.id = l.student_id
 ";
@@ -40,9 +40,19 @@ while ($row = $result->fetch_assoc()):
   <td><?= htmlspecialchars($row['brand']) ?></td>
   <td><?= htmlspecialchars($row['serial_number']) ?></td>
   <td>
-    <a href="edit_student.php?id=<?= $row['student_id'] ?>" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i> Edit</a>
-    <a href="delete_student.php?id=<?= $row['student_id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')"><i class="fas fa-trash"></i> Delete</a>
-    <a href="generate_qr.php?id=<?= $row['student_id'] ?>" class="btn btn-sm btn-info"><i class="fas fa-qrcode"></i> Generate QR</a>
+    <a href="edit_student.php?id=<?= $row['student_id'] ?>" class="btn btn-sm btn-warning">
+      <i class="fas fa-edit"></i> Edit
+    </a>
+    <a href="delete_student.php?id=<?= $row['student_id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')">
+      <i class="fas fa-trash"></i> Delete
+    </a>
+    <?php if (!empty($row['laptop_id'])): ?>
+      <a href="generate_qr.php?laptop_id=<?= $row['laptop_id'] ?>" class="btn btn-sm btn-info">
+        <i class="fas fa-qrcode"></i> Generate QR
+      </a>
+    <?php else: ?>
+      <span class="text-muted">No laptop</span>
+    <?php endif; ?>
   </td>
 </tr>
 <?php endwhile; ?>
