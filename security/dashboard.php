@@ -10,37 +10,45 @@ include '../includes/header.php';
 
 $info = null;
 
-// Handle confirm action (entry/exit)
+// Handle confirm action
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
     $action = $_POST['confirm_action'];
     $laptop_id = intval($_POST['laptop_id']);
     $guard_id = $_SESSION['user_id'];
+    $report_text = isset($_POST['report_issue']) ? trim($_POST['report_issue']) : '';
 
     if ($action === 'IN') {
         $stmt = $conn->prepare("
             INSERT INTO laptop_movements (laptop_id, security_guard_id, status, entry_time)
             VALUES (?, ?, 'IN', NOW())
         ");
-    } else {
+        $stmt->bind_param("ii", $laptop_id, $guard_id);
+    } elseif ($action === 'OUT') {
         $stmt = $conn->prepare("
             INSERT INTO laptop_movements (laptop_id, security_guard_id, status, exit_time)
             VALUES (?, ?, 'OUT', NOW())
         ");
+        $stmt->bind_param("ii", $laptop_id, $guard_id);
+    } elseif ($action === 'REPORT') {
+        $stmt = $conn->prepare("INSERT INTO issue_reports (laptop_id, issue_description, reported_by) VALUES (?, ?, ?)");
+        $stmt->bind_param("isi", $laptop_id, $report_text, $guard_id);
+    } else {
+        $_SESSION['error_message'] = "Invalid action.";
+        header("Location: dashboard.php");
+        exit;
     }
 
-    $stmt->bind_param("ii", $laptop_id, $guard_id);
-
     if ($stmt->execute()) {
-        $_SESSION['success_message'] = "Movement recorded: $action";
+        $_SESSION['success_message'] = "Action '$action' recorded successfully.";
     } else {
-        $_SESSION['error_message'] = "Error recording movement!";
+        $_SESSION['error_message'] = "Error recording action!";
     }
 
     header("Location: dashboard.php");
     exit;
 }
 
-// Handle QR scan input
+// Handle QR scan
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['scan_qr'])) {
     $input = trim($_POST['scan_qr']);
     if (preg_match('/laptop_id=(\d+)/', $input, $matches)) {
@@ -75,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['scan_qr'])) {
     }
 }
 
-// Counts
+// Count helpers
 function getLaptopStatusCount($conn, $status) {
     $stmt = $conn->prepare("
         SELECT COUNT(*) AS count
@@ -114,16 +122,14 @@ $logs = $conn->query("
     <h2>Welcome, <?= htmlspecialchars($_SESSION['name']) ?></h2>
     <a href="../auth/logout.php" class="btn btn-sm btn-outline-danger mb-3"><i class="fas fa-sign-out-alt"></i> Logout</a>
 
-    <?php
-    if (isset($_SESSION['success_message'])) {
-        echo "<div class='alert alert-success'>" . $_SESSION['success_message'] . "</div>";
-        unset($_SESSION['success_message']);
-    }
-    if (isset($_SESSION['error_message'])) {
-        echo "<div class='alert alert-danger'>" . $_SESSION['error_message'] . "</div>";
-        unset($_SESSION['error_message']);
-    }
-    ?>
+    <?php if (isset($_SESSION['success_message'])): ?>
+      <div class="alert alert-success"><?= $_SESSION['success_message'] ?></div>
+      <?php unset($_SESSION['success_message']); ?>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['error_message'])): ?>
+      <div class="alert alert-danger"><?= $_SESSION['error_message'] ?></div>
+      <?php unset($_SESSION['error_message']); ?>
+    <?php endif; ?>
 
     <form method="POST" class="mb-3">
       <label for="scan_qr" class="form-label">Scan or paste QR code content:</label>
@@ -140,16 +146,18 @@ $logs = $conn->query("
           <p><strong>Reg No:</strong> <?= htmlspecialchars($info['reg_no']) ?></p>
           <p><strong>Department:</strong> <?= htmlspecialchars($info['department']) ?></p>
           <p><strong>Laptop:</strong> <?= htmlspecialchars($info['brand']) ?> (<?= htmlspecialchars($info['serial_number']) ?>)</p>
-          <p><strong>Last Status:</strong> <span class="badge <?= $info['last_status'] === 'IN' ? 'bg-success' : 'bg-danger' ?>"><?= $info['last_status'] ?></span></p>
+          <p><strong>Last Status:</strong>
+            <span class="badge <?= $info['last_status'] === 'IN' ? 'bg-success' : ($info['last_status'] === 'OUT' ? 'bg-danger' : 'bg-warning') ?>">
+              <?= $info['last_status'] ?>
+            </span>
+          </p>
 
           <form method="POST" class="mt-2">
             <input type="hidden" name="laptop_id" value="<?= $info['laptop_id'] ?>">
-            <button name="confirm_action" value="IN" class="btn btn-success" <?= $info['last_status'] === 'IN' ? 'disabled' : '' ?>>
-              Confirm Entry
-            </button>
-            <button name="confirm_action" value="OUT" class="btn btn-danger" <?= $info['last_status'] === 'OUT' ? 'disabled' : '' ?>>
-              Confirm Exit
-            </button>
+            <textarea name="report_issue" class="form-control mb-2" rows="2" placeholder="Describe any issue (optional)..."></textarea>
+            <button name="confirm_action" value="IN" class="btn btn-success me-1" <?= $info['last_status'] === 'IN' ? 'disabled' : '' ?>>Confirm Entry</button>
+            <button name="confirm_action" value="OUT" class="btn btn-danger me-1" <?= $info['last_status'] === 'OUT' ? 'disabled' : '' ?>>Confirm Exit</button>
+            <button name="confirm_action" value="REPORT" class="btn btn-warning">Report Issue</button>
           </form>
         </div>
       </div>
@@ -203,8 +211,16 @@ $logs = $conn->query("
           <td><?= htmlspecialchars($row['reg_no']) ?></td>
           <td><?= htmlspecialchars($row['brand']) ?></td>
           <td><?= htmlspecialchars($row['serial_number']) ?></td>
-          <td><span class="badge <?= $row['status'] === 'IN' ? 'bg-success' : 'bg-danger' ?>"><?= $row['status'] ?></span></td>
-          <td><?= $row['status'] === 'IN' ? htmlspecialchars($row['entry_time']) : htmlspecialchars($row['exit_time']) ?></td>
+          <td>
+            <span class="badge <?= $row['status'] === 'IN' ? 'bg-success' : ($row['status'] === 'OUT' ? 'bg-danger' : 'bg-warning') ?>">
+              <?= $row['status'] ?>
+            </span>
+          </td>
+          <td>
+            <?= $row['status'] === 'IN'
+              ? htmlspecialchars($row['entry_time'])
+              : ($row['status'] === 'OUT' ? htmlspecialchars($row['exit_time']) : '-') ?>
+          </td>
         </tr>
         <?php endwhile; ?>
       </tbody>

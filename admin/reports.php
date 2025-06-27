@@ -8,63 +8,63 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 include '../includes/db.php';
 include '../includes/header.php';
 
-$start_date = $_GET['start_date'] ?? '';
-$end_date = $_GET['end_date'] ?? '';
+// ------------------ MOVEMENT FILTER ------------------
+$mv_start = $_GET['mv_start'] ?? '';
+$mv_end = $_GET['mv_end'] ?? '';
 
-$where = '';
-$params = [];
-$types = '';
+$mv_where = '';
+$mv_params = [];
+$mv_types = '';
 
-if (!empty($start_date) && !empty($end_date)) {
-    $where = "WHERE m.entry_time BETWEEN ? AND ?";
-    $params = [$start_date . ' 00:00:00', $end_date . ' 23:59:59'];
-    $types = 'ss';
+if (!empty($mv_start) && !empty($mv_end)) {
+    $mv_where = "WHERE m.entry_time BETWEEN ? AND ?";
+    $mv_params = [$mv_start . ' 00:00:00', $mv_end . ' 23:59:59'];
+    $mv_types = 'ss';
 }
 
-// Helper to build query where part correctly
 function build_where($where, $status) {
-    if (!empty($where)) {
-        return "$where AND m.status='$status'";
-    } else {
-        return "WHERE m.status='$status'";
-    }
+    return !empty($where) ? "$where AND m.status='$status'" : "WHERE m.status='$status'";
 }
 
-// Queries
-$sql_in = "SELECT COUNT(*) AS count FROM laptop_movements m " . build_where($where, 'IN');
-$sql_out = "SELECT COUNT(*) AS count FROM laptop_movements m " . build_where($where, 'OUT');
+$sql_in = "SELECT COUNT(*) AS count FROM laptop_movements m " . build_where($mv_where, 'IN');
+$sql_out = "SELECT COUNT(*) AS count FROM laptop_movements m " . build_where($mv_where, 'OUT');
 
-// For inside, no need for WHERE on subquery
 $sql_inside = "
-  SELECT COUNT(*) AS count FROM laptop_movements m
-  LEFT JOIN (
-    SELECT laptop_id, MAX(id) AS last_id
-    FROM laptop_movements
-    GROUP BY laptop_id
-  ) t ON m.laptop_id = t.laptop_id AND m.id = t.last_id
+    SELECT COUNT(*) AS count FROM laptop_movements m
+    LEFT JOIN (
+        SELECT laptop_id, MAX(id) AS last_id
+        FROM laptop_movements
+        GROUP BY laptop_id
+    ) t ON m.laptop_id = t.laptop_id AND m.id = t.last_id
 ";
-if (!empty($where)) {
-    $sql_inside .= " $where AND m.status='IN'";
-} else {
-    $sql_inside .= " WHERE m.status='IN'";
-}
+$sql_inside .= !empty($mv_where) ? " $mv_where AND m.status='IN'" : " WHERE m.status='IN'";
 
-// Execute
 function get_count($conn, $sql, $types, $params) {
     if ($types) {
         $stmt = $conn->prepare($sql);
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
-        $res = $stmt->get_result()->fetch_assoc();
-        return $res['count'];
+        return $stmt->get_result()->fetch_assoc()['count'];
     } else {
         return $conn->query($sql)->fetch_assoc()['count'];
     }
 }
 
-$in_count = get_count($conn, $sql_in, $types, $params);
-$out_count = get_count($conn, $sql_out, $types, $params);
-$inside_count = get_count($conn, $sql_inside, $types, $params);
+$in_count = get_count($conn, $sql_in, $mv_types, $mv_params);
+$out_count = get_count($conn, $sql_out, $mv_types, $mv_params);
+$inside_count = get_count($conn, $sql_inside, $mv_types, $mv_params);
+
+// ------------------ ISSUE FILTER ------------------
+$issue_start = $_GET['issue_start'] ?? '';
+$issue_end = $_GET['issue_end'] ?? '';
+
+$issue_where = '';
+if (!empty($issue_start) && !empty($issue_end)) {
+    $issue_where = "WHERE report_time BETWEEN '" . $issue_start . " 00:00:00' AND '" . $issue_end . " 23:59:59'";
+}
+
+$issue_sql = "SELECT COUNT(*) AS total_issues FROM issue_reports $issue_where";
+$total_issues = $conn->query($issue_sql)->fetch_assoc()['total_issues'];
 ?>
 
 <div class="d-flex">
@@ -73,21 +73,25 @@ $inside_count = get_count($conn, $sql_inside, $types, $params);
   <div class="flex-grow-1 p-4" style="margin-left:300px;">
     <h2>Reports</h2>
 
-    <!-- Date Filter -->
-    <form method="GET" class="row g-3 mb-4" style="max-width:600px;">
+    <!-- MOVEMENT FILTER -->
+    <form method="GET" class="row g-3 mb-4" style="max-width: 700px;">
+      <input type="hidden" name="issue_start" value="<?= htmlspecialchars($issue_start) ?>">
+      <input type="hidden" name="issue_end" value="<?= htmlspecialchars($issue_end) ?>">
       <div class="col-md-5">
-        <input type="date" name="start_date" class="form-control" value="<?= htmlspecialchars($start_date) ?>">
+        <label>Movement Start</label>
+        <input type="date" name="mv_start" class="form-control" value="<?= htmlspecialchars($mv_start) ?>">
       </div>
       <div class="col-md-5">
-        <input type="date" name="end_date" class="form-control" value="<?= htmlspecialchars($end_date) ?>">
+        <label>Movement End</label>
+        <input type="date" name="mv_end" class="form-control" value="<?= htmlspecialchars($mv_end) ?>">
       </div>
-      <div class="col-md-2">
-        <button class="btn btn-secondary w-100"><i class="fas fa-search"></i> Filter</button>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-dark w-100"><i class="fas fa-filter"></i> Filter Movements</button>
       </div>
     </form>
 
-    <!-- Summary -->
-    <div class="row g-4">
+    <!-- MOVEMENT SUMMARY -->
+    <div class="row g-4 mb-5">
       <div class="col-md-4">
         <div class="card bg-info text-white shadow">
           <div class="card-body">
@@ -96,7 +100,6 @@ $inside_count = get_count($conn, $sql_inside, $types, $params);
           </div>
         </div>
       </div>
-
       <div class="col-md-4">
         <div class="card bg-danger text-white shadow">
           <div class="card-body">
@@ -105,7 +108,6 @@ $inside_count = get_count($conn, $sql_inside, $types, $params);
           </div>
         </div>
       </div>
-
       <div class="col-md-4">
         <div class="card bg-success text-white shadow">
           <div class="card-body">
@@ -116,12 +118,54 @@ $inside_count = get_count($conn, $sql_inside, $types, $params);
       </div>
     </div>
 
-    <!-- Placeholder for export -->
-    <div class="mt-4">
-      <button class="btn btn-outline-primary"><i class="fas fa-file-download"></i> Export CSV</button>
-      <button class="btn btn-outline-secondary"><i class="fas fa-file-pdf"></i> Export PDF</button>
+    <!-- MOVEMENT EXPORT -->
+    <div class="mb-5">
+      <a href="export_csv.php?start_date=<?= urlencode($mv_start) ?>&end_date=<?= urlencode($mv_end) ?>" class="btn btn-outline-primary me-2">
+        <i class="fas fa-file-csv"></i> Export Movements CSV
+      </a>
+      <a href="export_pdf.php?start_date=<?= urlencode($mv_start) ?>&end_date=<?= urlencode($mv_end) ?>" class="btn btn-outline-secondary" target="_blank">
+        <i class="fas fa-file-pdf"></i> Export Movements PDF
+      </a>
     </div>
 
+    <!-- ISSUE FILTER -->
+    <form method="GET" class="row g-3 mb-4" style="max-width: 700px;">
+      <input type="hidden" name="mv_start" value="<?= htmlspecialchars($mv_start) ?>">
+      <input type="hidden" name="mv_end" value="<?= htmlspecialchars($mv_end) ?>">
+      <div class="col-md-5">
+        <label>Issue Start</label>
+        <input type="date" name="issue_start" class="form-control" value="<?= htmlspecialchars($issue_start) ?>">
+      </div>
+      <div class="col-md-5">
+        <label>Issue End</label>
+        <input type="date" name="issue_end" class="form-control" value="<?= htmlspecialchars($issue_end) ?>">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-dark w-100"><i class="fas fa-filter"></i> Filter Issues</button>
+      </div>
+    </form>
+
+    <!-- ISSUE SUMMARY -->
+    <div class="row g-4 mb-3">
+      <div class="col-md-4">
+        <div class="card bg-warning text-dark shadow">
+          <div class="card-body">
+            <h5><i class="fas fa-exclamation-triangle"></i> Reported Issues</h5>
+            <h2><?= $total_issues ?></h2>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ISSUE EXPORT -->
+    <div class="mb-4">
+      <a href="export_issues_csv.php?start_date=<?= urlencode($issue_start) ?>&end_date=<?= urlencode($issue_end) ?>" class="btn btn-outline-success me-2">
+        <i class="fas fa-file-csv"></i> Export Issues CSV
+      </a>
+      <a href="export_issues_pdf.php?start_date=<?= urlencode($issue_start) ?>&end_date=<?= urlencode($issue_end) ?>" class="btn btn-outline-danger" target="_blank">
+        <i class="fas fa-file-pdf"></i> Export Issues PDF
+      </a>
+    </div>
   </div>
 </div>
 

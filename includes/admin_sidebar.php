@@ -48,6 +48,7 @@
     <li><a href="manage_users.php" class="nav-link text-white"><i class="fas fa-users"></i> Manage Users</a></li>
     <li><a href="manage_students.php" class="nav-link text-white"><i class="fas fa-laptop"></i> Manage Laptop</a></li>
     <li><a href="movement_logs.php" class="nav-link text-white"><i class="fas fa-list"></i> Movement Logs</a></li>
+    <li><a href="issue_reports.php" class="nav-link text-white"><i class="fas fa-bug"></i> Issue Reports</a></li>
     <li><a href="reports.php" class="nav-link text-white"><i class="fas fa-chart-bar"></i> Reports</a></li>
     <li><a href="../auth/logout.php" class="nav-link text-white"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
   </ul>
