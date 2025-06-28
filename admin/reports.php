@@ -148,7 +148,7 @@ $total_issues = $conn->query($issue_sql)->fetch_assoc()['total_issues'];
     <!-- ISSUE SUMMARY -->
     <div class="row g-4 mb-3">
       <div class="col-md-4">
-        <div class="card bg-warning text-dark shadow">
+        <div class="card bg-primary text-white shadow">
           <div class="card-body">
             <h5><i class="fas fa-exclamation-triangle"></i> Reported Issues</h5>
             <h2><?= $total_issues ?></h2>
