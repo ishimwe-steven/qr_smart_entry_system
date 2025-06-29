@@ -112,6 +112,11 @@ include '../includes/header.php';
     color: #2c3e50;
     width: 200px;
   }
+   .dataTables_wrapper .dataTables_filter input:focus {
+    border-color: #00c4ff;
+    outline: none;
+    box-shadow: 0 0 5px rgba(0, 196, 255, 0.5);
+  }
   .dataTables_wrapper .dataTables_filter label {
     color: black;
     font-weight: 500;
