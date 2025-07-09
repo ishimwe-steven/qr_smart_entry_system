@@ -82,7 +82,7 @@ body { background-color: #f4f6f9; }
     background: linear-gradient(45deg, #2c3e50, #34495e);
     color: #ffffff;
   }
-  .table tbody tr {
+  .table tbody tr {  
     transition: background 0.3s ease;
   }
   .table tbody tr:hover {
