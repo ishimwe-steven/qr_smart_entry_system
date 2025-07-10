@@ -19,15 +19,20 @@ if ($result->num_rows === 1) {
 
         if ($user['role'] == 'admin') {
             header("Location: ../admin/dashboard.php");
+            exit;
         } elseif ($user['role'] == 'security') {
             header("Location: ../security/dashboard.php");
+            exit;
         } else {
-            echo "Unknown role!";
+            echo "<script>alert('Unknown role!'); window.location.href = 'login_form.php';</script>";
+            exit;
         }
     } else {
-        echo "Wrong password.";
+        echo "<script>alert('Wrong password!'); window.location.href = 'login_form.php';</script>";
+        exit;
     }
 } else {
-    echo "User not found.";
+    echo "<script>alert('User not found!'); window.location.href = 'login_form.php';</script>";
+    exit;
 }
 ?>
