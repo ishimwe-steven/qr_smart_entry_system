@@ -13,159 +13,164 @@ include '../includes/header.php';
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
 
 <!-- style-->
- <style>
+<style>
 body { background-color: #f4f6f9; }
-    .card { border: none; border-radius: 0.75rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,.15); }
+.card { border: none; border-radius: 0.75rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,.15); }
+.flex-grow-1 {
+  margin-left: 300px;
+  padding: 2rem;
+}
+h2 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.btn-primary {
+  background: linear-gradient(45deg, #007bff, #00c4ff);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  margin-bottom:1rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-primary:hover {
+  background: linear-gradient(45deg, #0056b3, #0096cc);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+}
+.btn-success {
+  background: linear-gradient(45deg, #28a745, #34c759);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  margin-bottom:1rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-success:hover {
+  background: linear-gradient(45deg, #218838, #2cb050);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+}
+.btn-info {
+  background: linear-gradient(45deg, #17a2b8, #1ac7e0);
+  border: none;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-info:hover {
+  background: linear-gradient(45deg, #138496, #17b2d3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(23, 162, 184, 0.4);
+}
+.btn-info1 {
+  background: transparent;
+  border: none;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.btn-primary i, .btn-success i, .btn-info i {
+  margin-right: 0.5rem;
+}
+.table-responsive {
+  width: 97%;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  overflow: hidden;
+}
+.table {
+  margin-bottom: 0;
+  color: #2c3e50;
+}
+.table thead.table-dark {
+  background: linear-gradient(45deg, #2c3e50, #34495e);
+  color: #ffffff;
+}
+.table tbody tr {  
+  transition: background 0.3s ease;
+}
+.table tbody tr:hover {
+  background: #f1f3f5;
+}
+.btn-warning {
+  background: linear-gradient(45deg, #ffc107, #ffca2c);
+  border: none;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-warning:hover {
+  background: linear-gradient(45deg, #e0a800, #ffca2c);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 193, 7, 0.4);
+}
+.btn-danger {
+  background: linear-gradient(45deg, #dc3545, #ff4d4d);
+  border: none;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-danger:hover {
+  background: linear-gradient(45deg, #b02a37, #ff4d4d);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+}
+.btn i {
+  margin-right: 0.3rem;
+}
+.dataTables_wrapper .dataTables_filter {
+  margin-bottom: 1rem;
+  margin-top:1rem;
+  margin-right:1rem;
+  text-align: left;
+}
+.dataTables_wrapper .dataTables_filter input {
+  border-radius: 0.5rem;
+  border: 1px solidrgb(0, 0, 0);
+  padding: 0.5rem;
+  background:#ffffff;
+  color: black;
+  width: 200px;
+  transition: border-color 0.3s ease;
+}
+.dataTables_wrapper .dataTables_filter input:focus {
+  border-color: #00c4ff;
+  outline: none;
+  box-shadow: 0 0 5px rgba(0, 196, 255, 0.5);
+}
+.dataTables_wrapper .dataTables_filter label {
+  color: #2c3e50;
+  font-weight: 500;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  background: #ffffff;
+  border: 1px solid #ced4da;
+  border-radius: 0.3rem;
+  color: #2c3e50 !important;
+  margin: 0 0.2rem;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: linear-gradient(45deg, #007bff, #00c4ff);
+  color: #ffffff !important;
+  border-color: transparent;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: linear-gradient(45deg, #007bff, #00c4ff);
+  color: #ffffff !important;
+  border-color: transparent;
+}
+@media (max-width: 768px) {
   .flex-grow-1 {
-    margin-left: 300px;
-    padding: 2rem;
-  }
-  h2 {
-    font-size: 2.5rem;
-    font-weight: 700;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-   
-  }
-  .btn-primary {
-    background: linear-gradient(45deg, #007bff, #00c4ff);
-    border: none;
-    border-radius: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    font-weight: 500;
-    margin-bottom:1rem;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .btn-primary:hover {
-    background: linear-gradient(45deg, #0056b3, #0096cc);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
-  }
-  .btn-success {
-    background: linear-gradient(45deg, #28a745, #34c759);
-    border: none;
-    border-radius: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    font-weight: 500;
-    margin-bottom:1rem;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .btn-success:hover {
-    background: linear-gradient(45deg, #218838, #2cb050);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
-  }
-  .btn-info {
-    background: linear-gradient(45deg, #17a2b8, #1ac7e0);
-    border: none;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .btn-info:hover {
-    background: linear-gradient(45deg, #138496, #17b2d3);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(23, 162, 184, 0.4);
-  }
-  .btn-primary i, .btn-success i, .btn-info i {
-    margin-right: 0.5rem;
+    margin-left: 0;
+    padding: 1rem;
   }
   .table-responsive {
-    width: 97%;
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 1rem;
-    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-    overflow: hidden;
+    width: 100%;
   }
-  .table {
-    margin-bottom: 0;
-    color: #2c3e50;
+  h2 {
+    font-size: 2rem;
   }
-  .table thead.table-dark {
-    background: linear-gradient(45deg, #2c3e50, #34495e);
-    color: #ffffff;
-  }
-  .table tbody tr {  
-    transition: background 0.3s ease;
-  }
-  .table tbody tr:hover {
-    background: #f1f3f5;
-  }
-  .btn-warning {
-    background: linear-gradient(45deg, #ffc107, #ffca2c);
-    border: none;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .btn-warning:hover {
-    background: linear-gradient(45deg, #e0a800, #ffca2c);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(255, 193, 7, 0.4);
-  }
-  .btn-danger {
-    background: linear-gradient(45deg, #dc3545, #ff4d4d);
-    border: none;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .btn-danger:hover {
-    background: linear-gradient(45deg, #b02a37, #ff4d4d);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
-  }
-  .btn i {
-    margin-right: 0.3rem;
-  }
-  .dataTables_wrapper .dataTables_filter {
-    margin-bottom: 1rem;
-    margin-top:1rem;
-    margin-right:1rem;
-    text-align: left;
-  }
-  .dataTables_wrapper .dataTables_filter input {
-    border-radius: 0.5rem;
-    border: 1px solidrgb(0, 0, 0);
-    padding: 0.5rem;
-    background:#ffffff;
-    color: black;
-    width: 200px;
-    transition: border-color 0.3s ease;
-  }
-  .dataTables_wrapper .dataTables_filter input:focus {
-    border-color: #00c4ff;
-    outline: none;
-    box-shadow: 0 0 5px rgba(0, 196, 255, 0.5);
-  }
-  .dataTables_wrapper .dataTables_filter label {
-    color: #2c3e50;
-    font-weight: 500;
-  }
-  .dataTables_wrapper .dataTables_paginate .paginate_button {
-    background: #ffffff;
-    border: 1px solid #ced4da;
-    border-radius: 0.3rem;
-    color: #2c3e50 !important;
-    margin: 0 0.2rem;
-    transition: background 0.3s ease, color 0.3s ease;
-  }
-  .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-    background: linear-gradient(45deg, #007bff, #00c4ff);
-    color: #ffffff !important;
-    border-color: transparent;
-  }
-  .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-    background: linear-gradient(45deg, #007bff, #00c4ff);
-    color: #ffffff !important;
-    border-color: transparent;
-  }
-  @media (max-width: 768px) {
-    .flex-grow-1 {
-      margin-left: 0;
-      padding: 1rem;
-    }
-    .table-responsive {
-      width: 100%;
-    }
-    h2 {
-      font-size: 2rem;
-    }
-  }
- </style>
+}
+</style>
 
 <div class="d-flex">
   <?php include '../includes/admin_sidebar.php'; ?>
@@ -173,12 +178,47 @@ body { background-color: #f4f6f9; }
   <div class="flex-grow-1 p-4" style="margin-left:300px;">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h2>Manage Laptops</h2>
-     
     </div>
-     <div class=""   style="margin-top:60px;">
-            <a href="add_student.php" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Student</a>
-             <a href="add_laptop.php" class="btn btn-success"><i class="fas fa-laptop"></i> Add Laptop</a>
-         </div>
+
+    <div class="" style="margin-top:60px;">
+        <a href="add_student.php" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Student</a>
+        <a href="add_laptop.php" class="btn btn-success"><i class="fas fa-laptop"></i> Add Laptop</a>
+
+        <!-- New Import Button -->
+        <button class="btn btn-info1 custom-white-btn" data-bs-toggle="modal" data-bs-target="#importModal">
+          <a class="btn btn-primary">  <i class="fas fa-file-import"></i> Import Students (Excel)</a>
+        </button>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <form action="import_students.php" method="POST" enctype="multipart/form-data" class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="importModalLabel"><i class="fas fa-file-import"></i> Import Students from Excel</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p>Upload an Excel (.xlsx, .xls) or CSV file with these columns:</p>
+            <ul>
+              <li>First Name</li>
+              <li>Last Name</li>
+              <li>Reg No</li>
+              <li>Department</li>
+              <li>Email</li>
+              <li>Phone</li>
+              <li>Laptop Brand</li>
+              <li>Laptop Serial</li>
+            </ul>
+            <input type="file" name="file" accept=".xlsx,.xls,.csv" class="form-control" required>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" name="import" class="btn btn-success">Import</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <div class="table-responsive" style="width:97%">
       <table id="studentsTable" class="table table-bordered table-striped" style="width:100%;">
@@ -236,6 +276,8 @@ body { background-color: #f4f6f9; }
 <!-- DataTables JS -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<!-- Bootstrap JS (for modal) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   $(document).ready(function() {
     $('#studentsTable').DataTable({
