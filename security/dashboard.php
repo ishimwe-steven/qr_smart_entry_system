@@ -39,7 +39,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
     }
 
     if ($stmt->execute()) {
-        $_SESSION['success_message'] = "Action '$action' recorded successfully.";
+        if ($action === 'REPORT') {
+            // --- Email notification to admin ---
+            $to = "stevenishimwe28@gmail.com"; // admin email
+            $subject = "🚨 New Laptop Issue Reported";
+            $message = "Hello Admin,\n\nA new laptop issue has been reported.\n\n" .
+                       "Laptop ID: " . $laptop_id . "\n" .
+                       "Reported By (Guard ID): " . $guard_id . "\n" .
+                       "Issue: " . (!empty($report_text) ? $report_text : "No description provided") . "\n\n" .
+                       "Please log in to the system for details.\n\n" .
+                       "Smart Entry System";
+            $headers = "From: noreply@smartentrysystem.com";
+
+            @mail($to, $subject, $message, $headers);
+
+            $_SESSION['success_message'] = "Issue reported and admin notified by email.";
+        } else {
+            $_SESSION['success_message'] = "Action '$action' recorded successfully.";
+        }
     } else {
         $_SESSION['error_message'] = "Error recording action!";
     }
@@ -473,8 +490,6 @@ $logs = $conn->query("
 </div>
 
 <?php include '../includes/footer.php'; ?>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/js/all.min.js">
-  
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/js/all.min.js"></script>
 </body>
 </html>

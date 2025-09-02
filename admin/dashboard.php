@@ -13,7 +13,7 @@ $totalStudents = $conn->query("SELECT COUNT(*) AS count FROM students")->fetch_a
 $currentlyInside = $conn->query("SELECT COUNT(*) AS count FROM laptop_movements WHERE status='IN'")->fetch_assoc()['count'];
 $currentlyOutside = $conn->query("SELECT COUNT(*) AS count FROM laptop_movements WHERE status='OUT'")->fetch_assoc()['count'];
 
-// Fetch latest issue reports (LIMIT 5)
+// Latest issue reports (LIMIT 5)
 $reports = $conn->query("
   SELECT r.id, r.laptop_id, r.issue_description, r.report_time, r.status,
          s.first_name AS student_fname, s.last_name AS student_lname,
@@ -27,6 +27,56 @@ $reports = $conn->query("
   LIMIT 5
 ");
 
+// Daily data (last 7 days)
+$dailyData = $conn->query("
+  SELECT DATE(created_at) as day, 
+         SUM(CASE WHEN status='IN' THEN 1 ELSE 0 END) as entry_count,
+         SUM(CASE WHEN status='OUT' THEN 1 ELSE 0 END) as exit_count
+  FROM laptop_movements
+  WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+  GROUP BY day
+  ORDER BY day ASC
+");
+
+$days = [];
+$entryDaily = [];
+$exitDaily = [];
+$totalDaily = [];
+$currentInside = 0;
+
+while ($row = $dailyData->fetch_assoc()) {
+    $days[] = $row['day'];
+    $entryDaily[] = $row['entry_count'];
+    $exitDaily[] = $row['exit_count'];
+    $currentInside += ($row['entry_count'] - $row['exit_count']);
+    $totalDaily[] = $currentInside;
+}
+
+// Monthly data (last 6 months)
+$monthlyData = $conn->query("
+  SELECT DATE_FORMAT(created_at, '%Y-%m') as month, 
+         SUM(CASE WHEN status='IN' THEN 1 ELSE 0 END) as entry_count,
+         SUM(CASE WHEN status='OUT' THEN 1 ELSE 0 END) as exit_count
+  FROM laptop_movements
+  WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+  GROUP BY month
+  ORDER BY month ASC
+");
+
+$months = [];
+$entryMonthly = [];
+$exitMonthly = [];
+$totalMonthly = [];
+$currentInsideMonth = 0;
+
+while ($row = $monthlyData->fetch_assoc()) {
+    $months[] = $row['month'];
+    $entryMonthly[] = $row['entry_count'];
+    $exitMonthly[] = $row['exit_count'];
+    $currentInsideMonth += ($row['entry_count'] - $row['exit_count']);
+    $totalMonthly[] = $currentInsideMonth;
+}
+
 include '../includes/header.php';
 ?>
 
@@ -37,112 +87,53 @@ include '../includes/header.php';
   <title>Admin Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { background-color: #f4f6f9; }
-    .card { border: none; border-radius: 0.75rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,.15); }
-    .container-fluid {
-      margin-left: 300px;
+    body {
+      background-color: #f4f6f9;
+      display: flex;
+    }
+    /* Sidebar fixed */
+    .sidebar {
+      width: 280px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      z-index: 1000;
+    }
+    /* Main content */
+    .main-content {
+      margin-left: 280px;
       padding: 2rem;
+      width: calc(100% - 280px);
     }
     .card {
       border: none;
+      border-radius: 0.75rem;
+      box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,.15);
+    }
+    .chart-container {
+      background: #fff;
       border-radius: 1rem;
-      background: rgba(255, 255, 255, 0.95);
-      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      padding: 20px;
+      margin-top: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     }
-    .card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 12px 40px rgba(31, 38, 135, 0.5);
-    }
-    .card-body {
-      padding: 1.5rem;
-    }
-    .card h5 {
-      font-weight: 600;
-      margin-bottom: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .card h2 {
-      font-size: 2.5rem;
-      font-weight: bold;
-      margin: 0.5rem 0;
-    }
-    .card a {
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.3s ease;
-    }
-    .card a:hover {
-      color: #ffd700 !important;
-    }
-    .bg-primary {
-      background: linear-gradient(45deg, #007bff, #00c4ff) !important;
-    }
-    .bg-success {
-      background: linear-gradient(45deg, #28a745, #34c759) !important;
-    }
-    .bg-info {
-      background: linear-gradient(45deg, #17a2b8, #1ac7e0) !important;
-    }
-    .bg-danger {
-      background: linear-gradient(45deg, #dc3545, #ff4d4d) !important;
-    }
-    .card-header {
-      background: linear-gradient(45deg, #2c3e50, #34495e) !important;
-      color: #ffffff;
-      font-weight: 600;
-      border-radius: 1rem 1rem 0 0 !important;
-      padding: 1rem 1.5rem;
-    }
-    h2.fs-1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-    h1.fs-3 {
-      font-size: 1.75rem;
-      font-weight: 500;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-    .table {
-      background: #ffffff;
-      border-radius: 0.5rem;
-      overflow: hidden;
-    }
-    .table thead {
-      background: #e9ecef;
-      color: #2c3e50;
-    }
-    .table tbody tr {
-      transition: background 0.3s ease;
-    }
-    .table tbody tr:hover {
-      background: #f1f3f5;
-    }
-    .badge {
-      padding: 0.5rem 1rem;
-      border-radius: 0.5rem;
-      font-weight: 500;
-    }
-    .badge.bg-success {
-      background: #28a745 !important;
-    }
-    .badge.bg-danger {
-      background: #dc3545 !important;
-    }
-    .text-muted {
-      color: #d1d5db !important;
+    .table-responsive {
+      max-height: 300px;
+      overflow-y: auto;
     }
     @media (max-width: 768px) {
-      .container-fluid {
-        margin-left: 0;
-        padding: 1rem;
+      .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
       }
-      .card {
-        width: 100% !important;
+      .main-content {
+        margin-left: 0;
+        width: 100%;
+        padding: 1rem;
       }
     }
   </style>
@@ -151,63 +142,73 @@ include '../includes/header.php';
 
 <?php include '../includes/admin_sidebar.php'; ?>
 
-<div class="container-fluid" style="margin-left: 300px; position:fixed;">
+<div class="main-content">
   <div class="p-4">
     <h2 class="mb-2 fs-1 text-center">Admin Dashboard</h2>
     <div class="p-3 fs-6">
-      <h1 class="fs-3" style="">Welcome, <?= htmlspecialchars($_SESSION['name']) ?> (Admin)</h1>
+      <h1 class="fs-3">Welcome, <?= htmlspecialchars($_SESSION['name']) ?> (Admin)</h1>
     </div>
 
+    <!-- Cards -->
     <div class="row g-4 mb-4">
-      <div class="col-md-3" style="width:400px">
+      <div class="col-md-3">
         <div class="card bg-primary text-white shadow">
           <div class="card-body">
             <h5><i class="fas fa-laptop"></i> Total Laptops</h5>
             <h2><?= $totalLaptops ?></h2>
-            <a href="manage_students.php" class="text-white">More info <i class="fas fa-arrow-circle-right"></i></a>
           </div>
         </div>
       </div>
-
-      <div class="col-md-3" style="width:400px">
+      <div class="col-md-3">
         <div class="card bg-success text-white shadow">
           <div class="card-body">
             <h5><i class="fas fa-user-graduate"></i> Total Students</h5>
             <h2><?= $totalStudents ?></h2>
-            <a href="manage_students.php" class="text-white">More info <i class="fas fa-arrow-circle-right"></i></a>
           </div>
         </div>
       </div>
-
-      <div class="col-md-3" style="width:400px">
+      <div class="col-md-3">
         <div class="card bg-info text-white shadow">
           <div class="card-body">
             <h5><i class="fas fa-door-open"></i> Laptops Inside</h5>
             <h2><?= $currentlyInside ?></h2>
-            <a href="movement_logs.php" class="text-white">More info <i class="fas fa-arrow-circle-right"></i></a>
           </div>
         </div>
       </div>
-
-      <div class="col-md-3" style="width:400px">
+      <div class="col-md-3">
         <div class="card bg-danger text-white shadow">
           <div class="card-body">
             <h5><i class="fas fa-door-closed"></i> Laptops Outside</h5>
             <h2><?= $currentlyOutside ?></h2>
-            <a href="movement_logs.php" class="text-white">More info <i class="fas fa-arrow-circle-right"></i></a>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Graphs -->
+    <div class="row">
+      <div class="col-md-6">
+        <div class="chart-container">
+          <h5 class="text-center">Laptop Movements (Daily - Last 7 Days)</h5>
+          <canvas id="dailyChart"></canvas>
+        </div>
+      </div>
+      <div class="col-md-6" >
+        <div class="chart-container" >
+          <h5 class="text-center">Laptop Movements (Monthly - Last 6 Months)</h5>
+          <canvas id="monthlyChart"></canvas>
         </div>
       </div>
     </div>
 
     <!-- Recent Issue Reports -->
-    <div class="card mt-5" style="width:102rem">
+    <div class="card mt-5">
       <div class="card-header bg-dark text-white">
         <i class="fas fa-exclamation-triangle"></i> Recent Issue Reports from Security
       </div>
-      <div class="card-body">
+      <div class="card-body table-responsive">
         <?php if ($reports->num_rows > 0): ?>
-          <table class="table table-bordered table-striped" style="width:100%;">
+          <table class="table table-bordered table-striped">
             <thead class="table-secondary">
               <tr>
                 <th>ID</th>
@@ -244,6 +245,34 @@ include '../includes/header.php';
     </div>
   </div>
 </div>
+
+<script>
+const dailyChart = new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+        labels: <?= json_encode($days) ?>,
+        datasets: [
+            { label: 'Entry', data: <?= json_encode($entryDaily) ?>, backgroundColor: 'orange' },
+            { label: 'Exit', data: <?= json_encode($exitDaily) ?>, backgroundColor: 'blue' },
+            { label: 'Total Inside', data: <?= json_encode($totalDaily) ?>, backgroundColor: 'green' }
+        ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+});
+
+const monthlyChart = new Chart(document.getElementById('monthlyChart'), {
+    type: 'bar',
+    data: {
+        labels: <?= json_encode($months) ?>,
+        datasets: [
+            { label: 'Entry', data: <?= json_encode($entryMonthly) ?>, backgroundColor: 'orange' },
+            { label: 'Exit', data: <?= json_encode($exitMonthly) ?>, backgroundColor: 'blue' },
+            { label: 'Total Inside', data: <?= json_encode($totalMonthly) ?>, backgroundColor: 'green' }
+        ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+});
+</script>
 
 <?php include '../includes/footer.php'; ?>
 </body>
