@@ -8,6 +8,24 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'security') {
 include '../includes/db.php';
 include '../includes/header.php';
 
+/**
+ * Helper: send SMS via GSM (through ESP32 HTTP endpoint)
+ */
+function sendSMS($to, $body) {
+    $esp32_host = "http://10.177.13.243"; 
+    $ch = curl_init($esp32_host . "/send_sms");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, [
+        'api_key' => 'hT7k9Qz!29xLmP@f3yVg',
+        'phone' => $to,
+        'message' => $body
+    ]);
+    $resp = curl_exec($ch);
+    curl_close($ch);
+    return $resp !== false;
+}
+
 $info = null;
 
 // Handle confirm action
@@ -15,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
     $action = $_POST['confirm_action'];
     $laptop_id = intval($_POST['laptop_id']);
     $guard_id = $_SESSION['user_id'];
+    $guard_name = $_SESSION['name'];
     $report_text = isset($_POST['report_issue']) ? trim($_POST['report_issue']) : '';
 
     if ($action === 'IN') {
@@ -40,8 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
 
     if ($stmt->execute()) {
         if ($action === 'REPORT') {
-            // --- Email notification to admin ---
-            $to = "stevenishimwe28@gmail.com"; // admin email
+          // --- Email notification to admin ---
+            $fo = "stevenishimwe28@gmail.com"; // admin email
             $subject = "🚨 New Laptop Issue Reported";
             $message = "Hello Admin,\n\nA new laptop issue has been reported.\n\n" .
                        "Laptop ID: " . $laptop_id . "\n" .
@@ -51,10 +70,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
                        "Smart Entry System";
             $headers = "From: noreply@smartentrysystem.com";
 
-            @mail($to, $subject, $message, $headers);
+            @mail($fo, $subject, $message, $headers);
 
             $_SESSION['success_message'] = "Issue reported and admin notified by email.";
+            
         } else {
+            // 👉 Get student phone
+            $studentQuery = $conn->prepare("
+                SELECT s.phone, s.first_name, s.last_name
+                FROM laptops l
+                JOIN students s ON l.student_id = s.id
+                WHERE l.id = ?
+            ");
+            $studentQuery->bind_param("i", $laptop_id);
+            $studentQuery->execute();
+            $studentRes = $studentQuery->get_result()->fetch_assoc();
+
+            if ($studentRes && !empty($studentRes['phone'])) {
+                $studentPhone = $studentRes['phone']; // must be like +2507XXXXXXX
+                $studentName  = $studentRes['first_name'] . ' ' . $studentRes['last_name'];
+                $timeNow = date("Y-m-d H:i:s");
+
+                if ($action === 'IN') {
+                    $msg = "Hello $studentName, your laptop entered the campus at $timeNow.";
+                } else {
+                    $msg = "Hello $studentName, your laptop exited the campus at $timeNow.";
+                }
+
+                sendSMS($studentPhone, $msg);
+            }
+
             $_SESSION['success_message'] = "Action '$action' recorded successfully.";
         }
     } else {
@@ -131,7 +176,6 @@ $logs = $conn->query("
     ORDER BY m.id DESC
 ");
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -140,236 +184,23 @@ $logs = $conn->query("
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-  <!-- Custom CSS -->
   <style>
    body { background-color: #f4f6f9; }
-    .card { border: none; border-radius: 0.75rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,.15); }
-    .d-flex {
-    
-    }
-    .flex-grow-1 {
-      margin-left: 250px; /* Adjusted to match assumed sidebar width */
-      padding: 2rem;
-      width: 100%;
-    }
-    h2 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-      
-      margin-bottom: 1.5rem;
-    }
-    h4 {
-      font-size: 1.5rem;
-      font-weight: 600;
-    
-      margin-top: 1.5rem;
-      margin-bottom: 1rem;
-    }
-    .form-label {
-      color: #2c3e50;
-      font-weight: 500;
-    }
-    .form-control, .form-select {
-    
-      color: #ffffff;
-      border: 1px solid #2c3e50;
-      border-radius: 0.5rem;
-      padding: 0.5rem;
-      transition: border-color 0.3s ease;
-    }
-    .form-control:focus, .form-select:focus {
-      border-color: #00c4ff;
-      outline: none;
-      box-shadow: 0 0 5px rgba(0, 196, 255, 0.5);
-    }
-    .form-control::placeholder {
-      color: #a0aec0;
-    }
-    .btn btn-outline-secondary{
-      background:red;
-    }
-    .btn-success {
-      background: linear-gradient(45deg, #28a745, #34c759);
-      border: none;
-      border-radius: 0.5rem;
-      font-weight: 500;
-      padding: 0.5rem 1rem;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .btn-success:hover {
-      background: linear-gradient(45deg, #218838, #2cb050);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
-    }
-    .btn-danger {
-      background: linear-gradient(45deg, #dc3545, #ff4d4d);
-      border: none;
-      border-radius: 0.5rem;
-      font-weight: 500;
-      padding: 0.5rem 1rem;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .btn-danger:hover {
-      background: linear-gradient(45deg, #c82333, #e03e3e);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
-    }
-    .btn-warning {
-      background: linear-gradient(45deg, #ffc107, #ffd84d);
-      border: none;
-      border-radius: 0.5rem;
-      font-weight: 500;
-      padding: 0.5rem 1rem;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .btn-warning:hover {
-      background: linear-gradient(45deg, #e0a800, #f0c107);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(255, 193, 7, 0.4);
-    }
-    .btn-outline-secondary {
-      border-color: #6c757d;
-      color: white;
-      border-radius: 0.5rem;
-      padding: 0.5rem 0.75rem;
-      background:linear-gradient(45deg, #6c757d, #8a959f);
-      margin-left:26rem;
-      margin-top:-4.2rem;
-    }
-    .btn-outline-secondary:hover {
-      background: linear-gradient(45deg, #6c757d, #8a959f);
-      color: #ffffff;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(108, 117, 125, 0.4);
-    }
-    .btn-outline-danger {
-      border-color: #dc3545;
-      color: #dc3545;
-      border-radius: 0.5rem;
-      padding: 0.25rem 0.75rem;
-      transition: background 0.3s ease, color 0.3s ease, transform 0.3s ease;
-    }
-    .btn-outline-danger:hover {
-      background: linear-gradient(45deg, #dc3545, #ff4d4d);
-      color: #ffffff;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
-    }
-    .btn i {
-      margin-right: 0.5rem;
-    }
-    .alert-success {
-      background: linear-gradient(45deg, #28a745, #34c759);
-      border: none;
-      border-radius: 0.5rem;
-      color: #ffffff;
-      font-weight: 500;
-      padding: 1rem;
-      margin-bottom: 1rem;
-    }
-    .alert-danger {
-      background: linear-gradient(45deg, #dc3545, #ff4d4d);
-      border: none;
-      border-radius: 0.5rem;
-      color: #ffffff;
-      font-weight: 500;
-      padding: 1rem;
-      margin-bottom: 1rem;
-    }
-    .card {
-      background: rgba(255, 255, 255, 0.95);
-      border: none;
-      border-radius: 1rem;
-      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-      margin-bottom: 2rem;
-    }
-    .card-body {
-      padding: 1.5rem;
-    }
-    .card.bg-success, .card.bg-info, .card.bg-danger {
-     
-      
-    }
-    .card.bg-success h5, .card.bg-info h5, .card.bg-danger h5 {
-      color: white;
-      font-weight: 600;
-    }
-    .card.bg-success h2, .card.bg-info h2, .card.bg-danger h2 {
-      color:white;
-      font-weight: 700;
-    }
-    .card.bg-success i, .card.bg-info i, .card.bg-danger i {
-      margin-right: 0.5rem;
-    }
-    .img-thumbnail {
-      border-radius: 0.5rem;
-      border: 1px solid #2c3e50;
-    }
-    .badge.bg-success {
-      background: linear-gradient(45deg, #28a745, #34c759) !important;
-    }
-    .badge.bg-danger {
-      background: linear-gradient(45deg, #dc3545, #ff4d4d) !important;
-    }
-    .badge.bg-warning {
-      background: linear-gradient(45deg, #ffc107, #ffd84d) !important;
-    }
-    .table {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 0.5rem;
-      overflow: hidden;
-      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-    }
-    .table-dark {
-      background: #2c3e50;
-      color: #ffffff;
-    }
-    .table-dark th {
-      font-weight: 600;
-    }
-    .table-striped tbody tr:nth-of-type(odd) {
-      background: rgba(44, 62, 80, 0.05);
-    }
-    .table-bordered {
-      border: 1px solid #2c3e50;
-    }
-    .table-bordered th, .table-bordered td {
-      border: 1px solid #2c3e50;
-    }
-    .table tbody tr:hover {
-      background: rgba(0, 123, 255, 0.1);
-    }
-    form {
-      max-width: 400px;
-      margin-bottom: 1.5rem;
-    }
-    @media (max-width: 768px) {
-      .flex-grow-1 {
-        margin-left: 0;
-        padding: 1rem;
-      }
-      form {
-        max-width: 100%;
-      }
-      h2 {
-        font-size: 2rem;
-      }
-      h4 {
-        font-size: 1.25rem;
-      }
-      .card {
-        margin-bottom: 1rem;
-      }
-      .table {
-        font-size: 0.9rem;
-      }
-      .table-responsive {
-        display: block;
-        width: 100%;
-        overflow-x: auto;
-      }
-    }
+   .card { border: none; border-radius: 0.75rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,.15); }
+   .flex-grow-1 { margin-left: 250px; padding: 2rem; width: 100%; }
+   h2 { font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+   h4 { font-size: 1.5rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 1rem; }
+   .form-control { border-radius: 0.5rem; padding: 0.5rem; }
+   .btn-success { background: linear-gradient(45deg, #28a745, #34c759); border: none; }
+   .btn-danger { background: linear-gradient(45deg, #dc3545, #ff4d4d); border: none; }
+   .btn-warning { background: linear-gradient(45deg, #ffc107, #ffd84d); border: none; }
+   .btn-outline-secondary { border-color: #6c757d; background:linear-gradient(45deg, #6c757d, #8a959f); color:white; }
+   .alert-success { background: linear-gradient(45deg, #28a745, #34c759); color:white; }
+   .alert-danger { background: linear-gradient(45deg, #dc3545, #ff4d4d); color:white; }
+   .badge.bg-success { background: linear-gradient(45deg, #28a745, #34c759) !important; }
+   .badge.bg-danger { background: linear-gradient(45deg, #dc3545, #ff4d4d) !important; }
+   .badge.bg-warning { background: linear-gradient(45deg, #ffc107, #ffd84d) !important; }
+   .table { border-radius: 0.5rem; overflow: hidden; }
   </style>
 </head>
 <body>
@@ -389,7 +220,7 @@ $logs = $conn->query("
       <?php unset($_SESSION['error_message']); ?>
     <?php endif; ?>
 
-    <form method="POST">
+    <form method="POST" id="qrForm">
       <label for="scan_qr" class="form-label">Scan or paste QR code content:</label>
       <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or laptop ID" autofocus>
     </form>
@@ -416,7 +247,7 @@ $logs = $conn->query("
             <button name="confirm_action" value="IN" class="btn btn-success me-1" <?= $info['last_status'] === 'IN' ? 'disabled' : '' ?>>Confirm Entry</button>
             <button name="confirm_action" value="OUT" class="btn btn-danger me-1" <?= $info['last_status'] === 'OUT' ? 'disabled' : '' ?>>Confirm Exit</button>
             <button name="confirm_action" value="REPORT" class="btn btn-warning me-1">Report Issue</button>
-            <a href="dashboard.php" class="btn btn-outline-secondary ">Cancel</a>
+            <a href="dashboard.php" class="btn btn-outline-secondary">Cancel</a>
           </form>
         </div>
       </div>
@@ -489,7 +320,17 @@ $logs = $conn->query("
   </div>
 </div>
 
-<?php include '../includes/footer.php'; ?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/js/all.min.js"></script>
+<script>
+//  Auto-submit QR value if it comes from ESP32 redirect (?scan_qr=)
+document.addEventListener("DOMContentLoaded", () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("scan_qr")) {
+    const val = params.get("scan_qr");
+    document.getElementById("scan_qr").value = val;
+    document.getElementById("qrForm").submit();
+  }
+});
+</script>
 </body>
 </html>
