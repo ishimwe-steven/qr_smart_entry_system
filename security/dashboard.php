@@ -12,28 +12,36 @@ include '../includes/header.php';
  * Helper: send SMS via GSM (through ESP32 HTTP endpoint)
  */
 function sendSMS($to, $body) {
-    $esp32_host = "http://10.177.13.243"; 
+    $esp32_host = "http://192.168.108.243";  // ESP32 IP yawe
+    $apiKey     = "hT7k9Qz!29xLmP@f3yVg";    // API key ya ESP32
     $ch = curl_init($esp32_host . "/send_sms");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, [
-        'api_key' => 'hT7k9Qz!29xLmP@f3yVg',
-        'phone' => $to,
+        'api_key' => $apiKey,
+        'phone'   => $to,
         'message' => $body
     ]);
     $resp = curl_exec($ch);
+    $error = curl_error($ch);
     curl_close($ch);
-    return $resp !== false;
+
+    if ($resp === false || strpos(strtolower($resp), "error") !== false) {
+        error_log("❌ SMS request failed: " . $error . " | Resp: " . $resp);
+        return false;
+    }
+    error_log("✅ SMS sent: " . $resp);
+    return true;
 }
 
 $info = null;
 
 // Handle confirm action
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
-    $action = $_POST['confirm_action'];
-    $laptop_id = intval($_POST['laptop_id']);
-    $guard_id = $_SESSION['user_id'];
-    $guard_name = $_SESSION['name'];
+    $action      = $_POST['confirm_action'];
+    $laptop_id   = intval($_POST['laptop_id']);
+    $guard_id    = $_SESSION['user_id'];
+    $guard_name  = $_SESSION['name'];
     $report_text = isset($_POST['report_issue']) ? trim($_POST['report_issue']) : '';
 
     if ($action === 'IN') {
@@ -51,28 +59,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
     } elseif ($action === 'REPORT') {
         $stmt = $conn->prepare("INSERT INTO issue_reports (laptop_id, issue_description, reported_by) VALUES (?, ?, ?)");
         $stmt->bind_param("isi", $laptop_id, $report_text, $guard_id);
-    } else {
+    }elseif ($action === 'Cancel') {
+         $_SESSION['error_message'] = "action canceled!!!.";
+        header("Location: dashboard.php");
+        exit;
+    }  else {
         $_SESSION['error_message'] = "Invalid action.";
         header("Location: dashboard.php");
         exit;
     }
 
     if ($stmt->execute()) {
-        if ($action === 'REPORT') {
-          // --- Email notification to admin ---
-            $fo = "stevenishimwe28@gmail.com"; // admin email
-            $subject = "🚨 New Laptop Issue Reported";
-            $message = "Hello Admin,\n\nA new laptop issue has been reported.\n\n" .
-                       "Laptop ID: " . $laptop_id . "\n" .
-                       "Reported By (Guard ID): " . $guard_id . "\n" .
-                       "Issue: " . (!empty($report_text) ? $report_text : "No description provided") . "\n\n" .
-                       "Please log in to the system for details.\n\n" .
-                       "Smart Entry System";
-            $headers = "From: noreply@smartentrysystem.com";
+        if ($action === 'REPORT') { 
+           // Fetch laptop & student info
+    $stmt2 = $conn->prepare("
+        SELECT l.serial_number, s.first_name, s.last_name
+        FROM laptops l
+        JOIN students s ON l.student_id = s.id
+        WHERE l.id = ?
+    ");
+    $stmt2->bind_param("i", $laptop_id);
+    $stmt2->execute();
+    $details = $stmt2->get_result()->fetch_assoc();
 
-            @mail($fo, $subject, $message, $headers);
-
-            $_SESSION['success_message'] = "Issue reported and admin notified by email.";
+    $studentName = $details ? ($details['first_name'] . ' ' . $details['last_name']) : 'Unknown';
+    $serial_number = $details ? $details['serial_number'] : 'Unknown';
+            // Store email params in session for EmailJS
+            $_SESSION['emailjs'] = [
+                'laptop_id' => $laptop_id,
+                'guard_id'  => $guard_id,
+                'guard_name' => $guard_name,
+                'serial_number' => $serial_number,
+                'studentName'   => $studentName,
+                'issue'     => $report_text !== '' ? $report_text : 'No description provided'
+                
+        
+            ];
+            $_SESSION['success_message'] = "Issue reported. Email notification will be sent.";
             
         } else {
             // 👉 Get student phone
@@ -87,9 +110,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
             $studentRes = $studentQuery->get_result()->fetch_assoc();
 
             if ($studentRes && !empty($studentRes['phone'])) {
-                $studentPhone = $studentRes['phone']; // must be like +2507XXXXXXX
+                $studentPhone = $studentRes['phone']; 
                 $studentName  = $studentRes['first_name'] . ' ' . $studentRes['last_name'];
-                $timeNow = date("Y-m-d H:i:s");
+                $timeNow      = date("Y-m-d H:i:s");
 
                 if ($action === 'IN') {
                     $msg = "Hello $studentName, your laptop entered the campus at $timeNow.";
@@ -97,7 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
                     $msg = "Hello $studentName, your laptop exited the campus at $timeNow.";
                 }
 
-                sendSMS($studentPhone, $msg);
+                $sent = sendSMS($studentPhone, $msg);
+                if (!$sent) {
+                    $_SESSION['error_message'] = "Action recorded, but SMS sending failed!";
+                }
             }
 
             $_SESSION['success_message'] = "Action '$action' recorded successfully.";
@@ -163,9 +189,9 @@ function getLaptopStatusCount($conn, $status) {
     return $res['count'];
 }
 
-$inside_count = getLaptopStatusCount($conn, 'IN');
+$inside_count   = getLaptopStatusCount($conn, 'IN');
 $today_in_count = $conn->query("SELECT COUNT(*) AS count FROM laptop_movements WHERE DATE(entry_time)=CURDATE() AND status='IN'")->fetch_assoc()['count'];
-$today_out_count = $conn->query("SELECT COUNT(*) AS count FROM laptop_movements WHERE DATE(exit_time)=CURDATE() AND status='OUT'")->fetch_assoc()['count'];
+$today_out_count= $conn->query("SELECT COUNT(*) AS count FROM laptop_movements WHERE DATE(exit_time)=CURDATE() AND status='OUT'")->fetch_assoc()['count'];
 
 $logs = $conn->query("
     SELECT m.*, s.first_name, s.last_name, s.reg_no, l.brand, l.serial_number
@@ -175,6 +201,12 @@ $logs = $conn->query("
     WHERE DATE(m.entry_time) = CURDATE() OR DATE(m.exit_time) = CURDATE()
     ORDER BY m.id DESC
 ");
+// EmailJS payload
+$emailjs_data = null;
+if (isset($_SESSION['emailjs'])) {
+    $emailjs_data = $_SESSION['emailjs'];
+    unset($_SESSION['emailjs']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -184,24 +216,265 @@ $logs = $conn->query("
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-  <style>
+   <!-- EmailJS -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script>
+  const EMAILJS_PUBLIC_KEY = "h-xKKqkQ1wIO_J85F";
+  const EMAILJS_SERVICE_ID = "service_ewtihn1";
+  const EMAILJS_TEMPLATE_ID = "template_ra20ecn";
+
+  document.addEventListener('DOMContentLoaded', function () {
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+
+  const EMAILJS_PARAMS = <?= json_encode($emailjs_data); ?>;
+  if (EMAILJS_PARAMS) {
+    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      name: "Guard " + EMAILJS_PARAMS.guard_name,
+      title: "Laptop ID " + EMAILJS_PARAMS.laptop_id,
+      serial_number: EMAILJS_PARAMS.serial_number,
+      studentName: EMAILJS_PARAMS.studentName,
+      guard_id: EMAILJS_PARAMS.guard_id,
+      issue: EMAILJS_PARAMS.issue
+    }).then(() => {
+      console.log("✅ EmailJS: Issue notification sent.");
+    }).catch(err => {
+      console.error("⚠️ EmailJS error:", err);
+    });
+  }
+});
+
+  </script>
+ <style>
    body { background-color: #f4f6f9; }
-   .card { border: none; border-radius: 0.75rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,.15); }
-   .flex-grow-1 { margin-left: 250px; padding: 2rem; width: 100%; }
-   h2 { font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem; }
-   h4 { font-size: 1.5rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 1rem; }
-   .form-control { border-radius: 0.5rem; padding: 0.5rem; }
-   .btn-success { background: linear-gradient(45deg, #28a745, #34c759); border: none; }
-   .btn-danger { background: linear-gradient(45deg, #dc3545, #ff4d4d); border: none; }
-   .btn-warning { background: linear-gradient(45deg, #ffc107, #ffd84d); border: none; }
-   .btn-outline-secondary { border-color: #6c757d; background:linear-gradient(45deg, #6c757d, #8a959f); color:white; }
-   .alert-success { background: linear-gradient(45deg, #28a745, #34c759); color:white; }
-   .alert-danger { background: linear-gradient(45deg, #dc3545, #ff4d4d); color:white; }
-   .badge.bg-success { background: linear-gradient(45deg, #28a745, #34c759) !important; }
-   .badge.bg-danger { background: linear-gradient(45deg, #dc3545, #ff4d4d) !important; }
-   .badge.bg-warning { background: linear-gradient(45deg, #ffc107, #ffd84d) !important; }
-   .table { border-radius: 0.5rem; overflow: hidden; }
+    .card { border: none; border-radius: 0.75rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,.15); }
+    .d-flex {
+    
+    }
+    .flex-grow-1 {
+      margin-left: 250px; /* Adjusted to match assumed sidebar width */
+      padding: 2rem;
+      width: 100%;
+    }
+    h2 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      
+      margin-bottom: 1.5rem;
+    }
+    h4 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .form-label {
+      color: #2c3e50;
+      font-weight: 500;
+    }
+    .form-control, .form-select {
+    
+      color: #ffffff;
+      border: 1px solid #2c3e50;
+      border-radius: 0.5rem;
+      padding: 0.5rem;
+      transition: border-color 0.3s ease;
+    }
+    .form-control:focus, .form-select:focus {
+      border-color: #00c4ff;
+      outline: none;
+      box-shadow: 0 0 5px rgba(0, 196, 255, 0.5);
+    }
+    .form-control::placeholder {
+      color: #a0aec0;
+    }
+    .btn btn-outline-secondary{
+      background:red;
+    }
+    .btn-success {
+      background: linear-gradient(45deg, #28a745, #34c759);
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .btn-success:hover {
+      background: linear-gradient(45deg, #218838, #2cb050);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+    }
+    .btn-danger {
+      background: linear-gradient(45deg, #dc3545, #ff4d4d);
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .btn-danger:hover {
+      background: linear-gradient(45deg, #c82333, #e03e3e);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+    }
+    .btn-warning {
+      background: linear-gradient(45deg, #ffc107, #ffd84d);
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .btn-warning:hover {
+      background: linear-gradient(45deg, #e0a800, #f0c107);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(255, 193, 7, 0.4);
+    }
+    .btn-outline-secondary {
+      border-color: #6c757d;
+      color: white;
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background:linear-gradient(45deg, #6c757d, #8a959f);
+      margin-left:26rem;
+      margin-top:-4.2rem;
+    }
+    .btn-outline-secondary:hover {
+      background: linear-gradient(45deg, #6c757d, #8a959f);
+      color: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(108, 117, 125, 0.4);
+    }
+    .btn-outline-danger {
+      border-color: #dc3545;
+      color: #dc3545;
+      border-radius: 0.5rem;
+      padding: 0.25rem 0.75rem;
+      transition: background 0.3s ease, color 0.3s ease, transform 0.3s ease;
+    }
+    .btn-outline-danger:hover {
+      background: linear-gradient(45deg, #dc3545, #ff4d4d);
+      color: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+    }
+    .btn i {
+      margin-right: 0.5rem;
+    }
+    .alert-success {
+      background: linear-gradient(45deg, #28a745, #34c759);
+      border: none;
+      border-radius: 0.5rem;
+      color: #ffffff;
+      font-weight: 500;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .alert-danger {
+      background: linear-gradient(45deg, #dc3545, #ff4d4d);
+      border: none;
+      border-radius: 0.5rem;
+      color: #ffffff;
+      font-weight: 500;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.95);
+      border: none;
+      border-radius: 1rem;
+      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+      margin-bottom: 2rem;
+    }
+    .card-body {
+      padding: 1.5rem;
+    }
+    .card.bg-success, .card.bg-info, .card.bg-danger {
+     
+      
+    }
+    .card.bg-success h5, .card.bg-info h5, .card.bg-danger h5 {
+      color: white;
+      font-weight: 600;
+    }
+    .card.bg-success h2, .card.bg-info h2, .card.bg-danger h2 {
+      color:white;
+      font-weight: 700;
+    }
+    .card.bg-success i, .card.bg-info i, .card.bg-danger i {
+      margin-right: 0.5rem;
+    }
+    .img-thumbnail {
+      border-radius: 0.5rem;
+      border: 1px solid #2c3e50;
+    }
+    .badge.bg-success {
+      background: linear-gradient(45deg, #28a745, #34c759) !important;
+    }
+    .badge.bg-danger {
+      background: linear-gradient(45deg, #dc3545, #ff4d4d) !important;
+    }
+    .badge.bg-warning {
+      background: linear-gradient(45deg, #ffc107, #ffd84d) !important;
+    }
+    .table {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 0.5rem;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+    }
+    .table-dark {
+      background: #2c3e50;
+      color: #ffffff;
+    }
+    .table-dark th {
+      font-weight: 600;
+    }
+    .table-striped tbody tr:nth-of-type(odd) {
+      background: rgba(44, 62, 80, 0.05);
+    }
+    .table-bordered {
+      border: 1px solid #2c3e50;
+    }
+    .table-bordered th, .table-bordered td {
+      border: 1px solid #2c3e50;
+    }
+    .table tbody tr:hover {
+      background: rgba(0, 123, 255, 0.1);
+    }
+    form {
+      max-width: 400px;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 768px) {
+      .flex-grow-1 {
+        margin-left: 0;
+        padding: 1rem;
+      }
+      form {
+        max-width: 100%;
+      }
+      h2 {
+        font-size: 2rem;
+      }
+      h4 {
+        font-size: 1.25rem;
+      }
+      .card {
+        margin-bottom: 1rem;
+      }
+      .table {
+        font-size: 0.9rem;
+      }
+      .table-responsive {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+      }
+    }
   </style>
+
 </head>
 <body>
 <div class="d-flex">
@@ -221,8 +494,8 @@ $logs = $conn->query("
     <?php endif; ?>
 
     <form method="POST" id="qrForm">
-      <label for="scan_qr" class="form-label">Scan or paste QR code content:</label>
-      <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or laptop ID" autofocus>
+      <label for="scan_qr" class="form-label">Scanned information it will  display automatically </label>
+      <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or laptop ID" autofocus hidden>
     </form>
 
     <?php if ($info): ?>
@@ -247,7 +520,8 @@ $logs = $conn->query("
             <button name="confirm_action" value="IN" class="btn btn-success me-1" <?= $info['last_status'] === 'IN' ? 'disabled' : '' ?>>Confirm Entry</button>
             <button name="confirm_action" value="OUT" class="btn btn-danger me-1" <?= $info['last_status'] === 'OUT' ? 'disabled' : '' ?>>Confirm Exit</button>
             <button name="confirm_action" value="REPORT" class="btn btn-warning me-1">Report Issue</button>
-            <a href="dashboard.php" class="btn btn-outline-secondary">Cancel</a>
+            <button name="confirm_action" value="Cancel" class="btn btn-outline-secondary">Cancel</button>
+           
           </form>
         </div>
       </div>
@@ -322,15 +596,73 @@ $logs = $conn->query("
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/js/all.min.js"></script>
 <script>
-//  Auto-submit QR value if it comes from ESP32 redirect (?scan_qr=)
 document.addEventListener("DOMContentLoaded", () => {
-  const params = new URLSearchParams(window.location.search);
-  if (params.has("scan_qr")) {
-    const val = params.get("scan_qr");
-    document.getElementById("scan_qr").value = val;
-    document.getElementById("qrForm").submit();
+  const input = document.getElementById("scan_qr");
+  const form = document.getElementById("qrForm");
+
+  let currentLaptopId = null;
+
+  console.log("Dashboard loaded, starting polling...");
+
+  // Function to poll last scanned laptop_id
+  async function checkLastScan() {
+    try {
+      const res = await fetch("http://LAPTOP-64L1NHB4.local/send_payload.php?last=1");
+      const data = await res.json();
+      console.log("Response:", data);
+
+      if (data.status === "success" && data.laptop_id) {
+        // Show only if new ID
+        if (currentLaptopId !== data.laptop_id) {
+          currentLaptopId = data.laptop_id;
+          input.value = currentLaptopId;
+          form.submit();
+        }
+      }
+    } catch (err) {
+      console.error("Polling error:", err);
+    }
   }
+
+  // Poll every 3 sec
+  setInterval(checkLastScan, 3000);
+
+  // Also auto-submit when guard pastes manually
+  input.addEventListener("input", () => {
+    if (input.value.trim().length > 0) {
+      setTimeout(() => {
+        currentLaptopId = input.value.trim();
+        form.submit();
+      }, 200);
+    }
+  });
+
+  // 👉 After guard clicks entry/exit/report → reset server & clear dashboard
+  document.querySelectorAll("button[name='confirm_action']").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      try {
+        // send reset to server
+        await fetch("http://LAPTOP-64L1NHB4.local/send_payload.php?reset=1");
+        console.log("Session reset, waiting for new scan...");
+
+        // clear dashboard input
+        input.value = "";
+        currentLaptopId = null;
+
+        // Optional: show "waiting" message
+        const studentBox = document.getElementById("student-info");
+        if (studentBox) {
+          studentBox.innerHTML = "<p>Waiting for next scan...</p>";
+        }
+      } catch (err) {
+        console.error("Reset error:", err);
+      }
+    });
+  });
 });
 </script>
+
+
+
 </body>
 </html>

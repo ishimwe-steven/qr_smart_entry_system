@@ -36,8 +36,8 @@ if ($result->num_rows !== 1) {
 
 $data = $result->fetch_assoc();
 
-// Build QR content (link with laptop_id)
-$content = "http://localhost/qr_smart_entry_system/admin/qr_view.php?laptop_id={$data['laptop_id']}";
+// Build QR content (link to ESP32-CAM endpoint)
+$content = "http://LAPTOP-64L1NHB4.local/send_payload.php?laptop_id={$data['laptop_id']}";
 
 // Generate QR code
 $qrDir = "../qr_codes/";
@@ -84,7 +84,7 @@ QRcode::png($content, $fileName, QR_ECLEVEL_H, 8);
 <div class="qr-container">
   <h3 class="mb-3">QR Code for <?= htmlspecialchars($data['first_name'] . ' ' . $data['last_name']) ?> (<?= htmlspecialchars($data['brand']) ?>)</h3>
   <img src="<?= $fileName ?>" alt="QR Code">
-  <p class="mb-3">Scan this QR code to view laptop info.</p>
+  <p class="mb-3">Scan this QR code to send laptop info directly to the ESP32-CAM.</p>
   <button class="btn btn-primary me-2" onclick="window.print()"><i class="fas fa-print"></i> Print QR Code</button>
   <a href="manage_students.php" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
 </div>
