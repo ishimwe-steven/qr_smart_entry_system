@@ -59,68 +59,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_action'])) {
     } elseif ($action === 'REPORT') {
         $stmt = $conn->prepare("INSERT INTO issue_reports (laptop_id, issue_description, reported_by) VALUES (?, ?, ?)");
         $stmt->bind_param("isi", $laptop_id, $report_text, $guard_id);
-    }elseif ($action === 'Cancel') {
+    } elseif ($action === 'Cancel') {
          $_SESSION['error_message'] = "action canceled!!!.";
         header("Location: dashboard.php");
         exit;
-    }  else {
+    } else {
         $_SESSION['error_message'] = "Invalid action.";
         header("Location: dashboard.php");
         exit;
     }
 
     if ($stmt->execute()) {
-        if ($action === 'REPORT') { 
-           // Fetch laptop & student info
-    $stmt2 = $conn->prepare("
-        SELECT l.serial_number, s.first_name, s.last_name
-        FROM laptops l
-        JOIN students s ON l.student_id = s.id
-        WHERE l.id = ?
-    ");
-    $stmt2->bind_param("i", $laptop_id);
-    $stmt2->execute();
-    $details = $stmt2->get_result()->fetch_assoc();
+        if ($action === 'REPORT') {
+            // Fetch laptop owner info (student or other) so email contains correct owner name & serial
+            $stmt2 = $conn->prepare("
+                SELECT l.serial_number,
+                       s.first_name AS s_first_name, s.last_name AS s_last_name,
+                       o.first_name AS o_first_name, o.last_name AS o_last_name
+                FROM laptops l
+                LEFT JOIN students s ON l.student_id = s.id
+                LEFT JOIN others o ON l.other_id = o.id
+                WHERE l.id = ?
+            ");
+            $stmt2->bind_param("i", $laptop_id);
+            $stmt2->execute();
+            $details = $stmt2->get_result()->fetch_assoc();
 
-    $studentName = $details ? ($details['first_name'] . ' ' . $details['last_name']) : 'Unknown';
-    $serial_number = $details ? $details['serial_number'] : 'Unknown';
+            $ownerName = 'Unknown';
+            if ($details) {
+                if (!empty($details['s_first_name']) || !empty($details['s_last_name'])) {
+                    $ownerName = trim(($details['s_first_name'] ?? '') . ' ' . ($details['s_last_name'] ?? ''));
+                } elseif (!empty($details['o_first_name']) || !empty($details['o_last_name'])) {
+                    $ownerName = trim(($details['o_first_name'] ?? '') . ' ' . ($details['o_last_name'] ?? ''));
+                }
+            }
+            $serial_number = $details['serial_number'] ?? 'Unknown';
+
             // Store email params in session for EmailJS
             $_SESSION['emailjs'] = [
                 'laptop_id' => $laptop_id,
                 'guard_id'  => $guard_id,
                 'guard_name' => $guard_name,
                 'serial_number' => $serial_number,
-                'studentName'   => $studentName,
+                // keep key name studentName for compatibility with existing JS
+                'studentName'   => $ownerName,
                 'issue'     => $report_text !== '' ? $report_text : 'No description provided'
-                
-        
             ];
             $_SESSION['success_message'] = "Issue reported. Email notification will be sent.";
-            
         } else {
-            // 👉 Get student phone
+            // For IN / OUT: attempt to fetch phone either from student or other and send SMS
             $studentQuery = $conn->prepare("
-                SELECT s.phone, s.first_name, s.last_name
+                SELECT s.phone AS s_phone, s.first_name AS s_first_name, s.last_name AS s_last_name,
+                       o.phone AS o_phone, o.first_name AS o_first_name, o.last_name AS o_last_name
                 FROM laptops l
-                JOIN students s ON l.student_id = s.id
+                LEFT JOIN students s ON l.student_id = s.id
+                LEFT JOIN others o ON l.other_id = o.id
                 WHERE l.id = ?
             ");
             $studentQuery->bind_param("i", $laptop_id);
             $studentQuery->execute();
             $studentRes = $studentQuery->get_result()->fetch_assoc();
 
-            if ($studentRes && !empty($studentRes['phone'])) {
-                $studentPhone = $studentRes['phone']; 
-                $studentName  = $studentRes['first_name'] . ' ' . $studentRes['last_name'];
-                $timeNow      = date("Y-m-d H:i:s");
-
-                if ($action === 'IN') {
-                    $msg = "Hello $studentName, your laptop entered the campus at $timeNow.";
-                } else {
-                    $msg = "Hello $studentName, your laptop exited the campus at $timeNow.";
+            $contactPhone = null;
+            $contactName = 'Owner';
+            if ($studentRes) {
+                if (!empty($studentRes['s_phone'])) {
+                    $contactPhone = $studentRes['s_phone'];
+                    $contactName = trim(($studentRes['s_first_name'] ?? '') . ' ' . ($studentRes['s_last_name'] ?? ''));
+                } elseif (!empty($studentRes['o_phone'])) {
+                    $contactPhone = $studentRes['o_phone'];
+                    $contactName = trim(($studentRes['o_first_name'] ?? '') . ' ' . ($studentRes['o_last_name'] ?? ''));
                 }
+            }
 
-                $sent = sendSMS($studentPhone, $msg);
+            if ($contactPhone) {
+                $timeNow = date("Y-m-d H:i:s");
+                if ($action === 'IN') {
+                    $msg = "Hello $contactName, your laptop entered the campus at $timeNow.";
+                } else {
+                    $msg = "Hello $contactName, your laptop exited the campus at $timeNow.";
+                }
+                $sent = sendSMS($contactPhone, $msg);
                 if (!$sent) {
                     $_SESSION['error_message'] = "Action recorded, but SMS sending failed!";
                 }
@@ -145,11 +164,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['scan_qr'])) {
         $laptop_id = intval($input);
     }
 
+    // NOTE: select both student and other fields; keep student keys same as before for compatibility
     $stmt = $conn->prepare("
-        SELECT s.id AS student_id, s.first_name, s.last_name, s.reg_no, s.department, s.picture,
-               l.id AS laptop_id, l.brand, l.serial_number
+        SELECT 
+            l.id AS laptop_id, l.brand, l.serial_number, l.owner_type, l.other_id,
+            s.id AS student_id, s.first_name, s.last_name, s.reg_no, s.department, s.picture,
+            o.id AS other_id, o.first_name AS other_first_name, o.last_name AS other_last_name,
+            o.role AS other_role, o.department AS other_department, o.national_id AS other_national_id,
+            o.email AS other_email, o.phone AS other_phone, o.picture AS other_picture
         FROM laptops l
         LEFT JOIN students s ON l.student_id = s.id
+        LEFT JOIN others o ON l.other_id = o.id
         WHERE l.id = ?
     ");
     $stmt->bind_param("i", $laptop_id);
@@ -224,25 +249,28 @@ if (isset($_SESSION['emailjs'])) {
   const EMAILJS_TEMPLATE_ID = "template_ra20ecn";
 
   document.addEventListener('DOMContentLoaded', function () {
-  emailjs.init(EMAILJS_PUBLIC_KEY);
+    try {
+      emailjs.init(EMAILJS_PUBLIC_KEY);
+    } catch (e) {
+      console.error("EmailJS init error:", e);
+    }
 
-  const EMAILJS_PARAMS = <?= json_encode($emailjs_data); ?>;
-  if (EMAILJS_PARAMS) {
-    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      name: "Guard " + EMAILJS_PARAMS.guard_name,
-      title: "Laptop ID " + EMAILJS_PARAMS.laptop_id,
-      serial_number: EMAILJS_PARAMS.serial_number,
-      studentName: EMAILJS_PARAMS.studentName,
-      guard_id: EMAILJS_PARAMS.guard_id,
-      issue: EMAILJS_PARAMS.issue
-    }).then(() => {
-      console.log("✅ EmailJS: Issue notification sent.");
-    }).catch(err => {
-      console.error("⚠️ EmailJS error:", err);
-    });
-  }
-});
-
+    const EMAILJS_PARAMS = <?= json_encode($emailjs_data); ?>;
+    if (EMAILJS_PARAMS) {
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        name: "Guard " + EMAILJS_PARAMS.guard_name,
+        title: "Laptop ID " + EMAILJS_PARAMS.laptop_id,
+        serial_number: EMAILJS_PARAMS.serial_number,
+        studentName: EMAILJS_PARAMS.studentName,
+        guard_id: EMAILJS_PARAMS.guard_id,
+        issue: EMAILJS_PARAMS.issue
+      }).then(() => {
+        console.log("✅ EmailJS: Issue notification sent.");
+      }).catch(err => {
+        console.error("⚠️ EmailJS error:", err);
+      });
+    }
+  });
   </script>
  <style>
    body { background-color: #f4f6f9; }
@@ -495,18 +523,35 @@ if (isset($_SESSION['emailjs'])) {
 
     <form method="POST" id="qrForm">
       <label for="scan_qr" class="form-label">Scanned information it will  display automatically </label>
-      <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or laptop ID" autofocus hidden>
+      <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or laptop ID" autofocus >
     </form>
 
     <?php if ($info): ?>
       <div class="card mb-4">
-        <div class="card-body">
-          <div class="mb-2">
-            <img src="../Uploads/<?= htmlspecialchars($info['picture']) ?>" width="120" class="img-thumbnail">
-          </div>
-          <p><strong>Name:</strong> <?= htmlspecialchars($info['first_name'] . ' ' . $info['last_name']) ?></p>
-          <p><strong>Reg No:</strong> <?= htmlspecialchars($info['reg_no']) ?></p>
-          <p><strong>Department:</strong> <?= htmlspecialchars($info['department']) ?></p>
+        <div class="card-body" id="student-info">
+          <?php if (!empty($info['student_id'])): ?>
+            <div class="mb-2">
+              <?php if (!empty($info['picture'])): ?>
+                <img src="../Uploads/<?= htmlspecialchars($info['picture']) ?>" width="120" class="img-thumbnail">
+              <?php endif; ?>
+            </div>
+            <p><strong>Name:</strong> <?= htmlspecialchars($info['first_name'] . ' ' . $info['last_name']) ?></p>
+            <p><strong>Reg No:</strong> <?= htmlspecialchars($info['reg_no']) ?></p>
+            <p><strong>Department:</strong> <?= htmlspecialchars($info['department']) ?></p>
+          <?php elseif (!empty($info['other_id'])): ?>
+            <div class="mb-2">
+              <?php if (!empty($info['other_picture'])): ?>
+                <img src="../Uploads/<?= htmlspecialchars($info['other_picture']) ?>" width="120" class="img-thumbnail">
+              <?php endif; ?>
+            </div>
+            <p><strong>Name:</strong> <?= htmlspecialchars($info['other_first_name'] . ' ' . $info['other_last_name']) ?></p>
+            <p><strong>Role:</strong> <?= htmlspecialchars($info['other_role']) ?></p>
+            <p><strong>Department:</strong> <?= htmlspecialchars($info['other_department']) ?></p>
+            <p><strong>National ID:</strong> <?= htmlspecialchars($info['other_national_id']) ?></p>
+            <p><strong>Email:</strong> <?= htmlspecialchars($info['other_email']) ?></p>
+            <p><strong>Phone:</strong> <?= htmlspecialchars($info['other_phone']) ?></p>
+          <?php endif; ?>
+
           <p><strong>Laptop:</strong> <?= htmlspecialchars($info['brand']) ?> (<?= htmlspecialchars($info['serial_number']) ?>)</p>
           <p><strong>Last Status:</strong>
             <span class="badge <?= $info['last_status'] === 'IN' ? 'bg-success' : ($info['last_status'] === 'OUT' ? 'bg-danger' : 'bg-warning') ?>">
@@ -521,7 +566,6 @@ if (isset($_SESSION['emailjs'])) {
             <button name="confirm_action" value="OUT" class="btn btn-danger me-1" <?= $info['last_status'] === 'OUT' ? 'disabled' : '' ?>>Confirm Exit</button>
             <button name="confirm_action" value="REPORT" class="btn btn-warning me-1">Report Issue</button>
             <button name="confirm_action" value="Cancel" class="btn btn-outline-secondary">Cancel</button>
-           
           </form>
         </div>
       </div>

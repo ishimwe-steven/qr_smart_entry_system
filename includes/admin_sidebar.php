@@ -6,7 +6,22 @@
   <ul class="nav nav-pills flex-column mb-auto">
     <li><a href="dashboard.php" class="nav-link text-white"><i class="fas fa-home"></i> Dashboard</a></li>
     <li><a href="manage_users.php" class="nav-link text-white"><i class="fas fa-users"></i> Manage Users</a></li>
-    <li><a href="manage_students.php" class="nav-link text-white"><i class="fas fa-laptop"></i> Manage Laptop</a></li>
+    
+    <!-- Dropdown for Manage Laptops -->
+    <li>
+      <a class="nav-link text-white d-flex justify-content-between align-items-center" 
+         data-bs-toggle="collapse" href="#manageLaptopMenu" role="button" aria-expanded="false" aria-controls="manageLaptopMenu">
+        <span><i class="fas fa-laptop"></i> Manage Laptops</span>
+        <i class="fas fa-caret-down"></i>
+      </a>
+      <div class="collapse" id="manageLaptopMenu">
+        <ul class="btn-toggle-nav list-unstyled fw-normal small ms-3">
+          <li><a href="manage_students.php" class="nav-link text-white"><i class="fas fa-user-graduate"></i> Student Laptops</a></li>
+          <li><a href="manage_others.php" class="nav-link text-white"><i class="fas fa-user-tie"></i> Others Laptops</a></li>
+        </ul>
+      </div>
+    </li>
+
     <li><a href="movement_logs.php" class="nav-link text-white"><i class="fas fa-list"></i> Movement Logs</a></li>
     <li><a href="issue_reports.php" class="nav-link text-white"><i class="fas fa-bug"></i> Issue Reports</a></li>
     <li><a href="reports.php" class="nav-link text-white"><i class="fas fa-chart-bar"></i> Reports</a></li>

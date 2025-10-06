@@ -53,6 +53,20 @@ h2 {
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
 }
+.btn-secondary{
+  background: linear-gradient(45deg, #768178ff, #79837bff);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  margin-bottom:1rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-secondary:hover {
+  background: linear-gradient(45deg, #768178ff, #79837bff);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+}
 .btn-info {
   background: linear-gradient(45deg, #17a2b8, #1ac7e0);
   border: none;
