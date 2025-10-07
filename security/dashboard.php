@@ -523,7 +523,7 @@ if (isset($_SESSION['emailjs'])) {
 
     <form method="POST" id="qrForm">
       <label for="scan_qr" class="form-label">Scanned information it will  display automatically </label>
-      <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or laptop ID" autofocus >
+      <input type="text" name="scan_qr" id="scan_qr" class="form-control" placeholder="Paste QR link or laptop ID" autofocus hidden>
     </form>
 
     <?php if ($info): ?>
@@ -669,7 +669,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Poll every 3 sec
-  setInterval(checkLastScan, 3000);
+  setInterval(checkLastScan, 9000);
 
   // Also auto-submit when guard pastes manually
   input.addEventListener("input", () => {

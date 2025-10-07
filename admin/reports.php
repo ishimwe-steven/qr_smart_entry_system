@@ -60,10 +60,18 @@ $issue_end = $_GET['issue_end'] ?? '';
 
 $issue_where = '';
 if (!empty($issue_start) && !empty($issue_end)) {
-    $issue_where = "WHERE report_time BETWEEN '" . $issue_start . " 00:00:00' AND '" . $issue_end . " 23:59:59'";
+    $issue_where = "WHERE r.report_time BETWEEN '" . $issue_start . " 00:00:00' AND '" . $issue_end . " 23:59:59'";
 }
 
-$issue_sql = "SELECT COUNT(*) AS total_issues FROM issue_reports $issue_where";
+// Count issues from both Students and Others
+$issue_sql = "
+    SELECT COUNT(*) AS total_issues 
+    FROM issue_reports r
+    LEFT JOIN laptops l ON r.laptop_id = l.id
+    LEFT JOIN students s ON l.student_id = s.id
+    LEFT JOIN others o ON l.other_id = o.id
+    $issue_where
+";
 $total_issues = $conn->query($issue_sql)->fetch_assoc()['total_issues'];
 ?>
 
@@ -232,11 +240,12 @@ $total_issues = $conn->query($issue_sql)->fetch_assoc()['total_issues'];
       }
     }
 </style>
+
 <div class="d-flex">
   <?php include '../includes/admin_sidebar.php'; ?>
 
-  <div class="flex-grow-1 p-4" style="margin-left:300px;">
-    <h2 class="text-black">Reports</h2>
+  <div class="flex-grow-1 p-4">
+    <h2>Reports</h2>
 
     <!-- MOVEMENT FILTER -->
     <form method="GET" class="row g-3 mb-4" style="max-width: 700px;">
@@ -251,7 +260,7 @@ $total_issues = $conn->query($issue_sql)->fetch_assoc()['total_issues'];
         <input type="date" name="mv_end" class="form-control" value="<?= htmlspecialchars($mv_end) ?>">
       </div>
       <div class="col-md-2 d-flex align-items-end">
-        <button class="btn btn-dark w-100"><i class="fas fa-filter"></i> Filter Movements</button>
+        <button class="btn btn-dark w-100"><i class="fas fa-filter"></i> Filter</button>
       </div>
     </form>
 
@@ -306,7 +315,7 @@ $total_issues = $conn->query($issue_sql)->fetch_assoc()['total_issues'];
         <input type="date" name="issue_end" class="form-control" value="<?= htmlspecialchars($issue_end) ?>">
       </div>
       <div class="col-md-2 d-flex align-items-end">
-        <button class="btn btn-dark w-100"><i class="fas fa-filter"></i> Filter Issues</button>
+        <button class="btn btn-dark w-100"><i class="fas fa-filter"></i> Filter</button>
       </div>
     </form>
 
@@ -315,7 +324,7 @@ $total_issues = $conn->query($issue_sql)->fetch_assoc()['total_issues'];
       <div class="col-md-4">
         <div class="card bg-primary text-white shadow">
           <div class="card-body">
-            <h5><i class="fas fa-exclamation-triangle"></i> Reported Issues</h5>
+            <h5><i class="fas fa-exclamation-triangle"></i> Reported Issues (All Users)</h5>
             <h2><?= $total_issues ?></h2>
           </div>
         </div>
